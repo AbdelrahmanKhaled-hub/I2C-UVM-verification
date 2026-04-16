@@ -17,7 +17,7 @@ class Master_monitor extends uvm_monitor;
 
   uvm_analysis_port #(Master_seq_item) monitor_ap;
 
-  function new(string name, uvm_component parent);
+  function new(string name = "Master_monitor", uvm_component parent);
     super.new(name, parent);
   endfunction
 
@@ -30,29 +30,71 @@ class Master_monitor extends uvm_monitor;
       `uvm_fatal("MON", "Virtual interface not set")
   endfunction
 
-  task run_phase(uvm_phase phase);
-    forever begin
+task run_phase(uvm_phase phase);
+  bit prev_sda;
 
-      req = Master_seq_item::type_id::create("req");
+  forever begin
 
-      @(posedge vif.SCL_I); // better for I2C
-      #0.01; // small delay to ensure signals are stable
+    req = new();
 
-      req.rst   = vif.rst;
-      req.start = vif.start;
-      req.Data  = vif.Data;
+    
+    // WAIT FOR CLOCK EDGE
+    
+    @(posedge vif.SCL_O);
 
-      req.SCL_I = vif.SCL_I;
-      req.SDA_I = vif.SDA_I;
-
-      `uvm_info("Master_monitor",
-        $sformatf("Monitored data: %0h", req.Data),
-        UVM_MEDIUM)
-
-      monitor_ap.write(req);
-
+    
+    // START DETECTION
+    // SDA: 1 → 0 while SCL = 1
+    
+    if (prev_sda == 1 && vif.SDA_O == 0 && vif.SCL_O == 1) begin
+      `uvm_info("MON", "START detected", UVM_LOW)
     end
-  endtask
+
+    
+    // CAPTURE BYTE
+    
+    for (int i = 7; i >= 0; i--) begin
+      @(posedge vif.SCL_O);
+      req.Data[i] = vif.SDA_O;
+    end
+
+    
+    // ACK / NACK CAPTURE
+    
+    @(posedge vif.SCL_O);
+    req.SDA_I = vif.SDA_I;
+
+    
+    // STOP DETECTION (IMPORTANT FIX)
+    // SDA: 0 → 1 while SCL = 1
+    
+    if (prev_sda == 0 && vif.SDA_O == 1 && vif.SCL_O == 1) begin
+      `uvm_info("MON", "STOP detected (burst end)", UVM_LOW)
+    end
+
+    
+    // STORE BUS STATE
+    
+    req.rst   = vif.rst;
+    req.start = vif.start;
+    req.SCL_O = vif.SCL_O;
+    req.SDA_O = vif.SDA_O;
+
+    // update previous SDA
+    prev_sda = vif.SDA_O;
+
+    
+    // SEND TO SCOREBOARD
+    
+    `uvm_info("Master_monitor",
+      $sformatf("Captured Data=%0h ACK=%0b",
+                req.Data, req.SDA_I),
+      UVM_MEDIUM)
+
+    monitor_ap.write(req);
+
+  end
+endtask
 
 endclass
     

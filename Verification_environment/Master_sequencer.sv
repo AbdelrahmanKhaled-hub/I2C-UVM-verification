@@ -7,7 +7,7 @@ class Master_sequencer extends uvm_sequencer;
 
   `uvm_component_utils(Master_sequencer)
 
-  function new(string name, uvm_component parent);
+  function new(string name = "Master_sequencer", uvm_component parent);
     super.new(name, parent);
   endfunction
 
