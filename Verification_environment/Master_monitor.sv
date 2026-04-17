@@ -31,68 +31,22 @@ class Master_monitor extends uvm_monitor;
   endfunction
 
 task run_phase(uvm_phase phase);
-  bit prev_sda;
-
   forever begin
+    // Wake up exactly when the RTL evaluates
+    @(posedge vif.clk);
 
-    req = new();
+    req = Master_seq_item::type_id::create("req");
 
-    
-    // WAIT FOR CLOCK EDGE
-    
-    @(posedge vif.SCL_O);
-
-    
-    // START DETECTION
-    // SDA: 1 → 0 while SCL = 1
-    
-    if (prev_sda == 1 && vif.SDA_O == 0 && vif.SCL_O == 1) begin
-      `uvm_info("MON", "START detected", UVM_LOW)
-    end
-
-    
-    // CAPTURE BYTE
-    
-    for (int i = 7; i >= 0; i--) begin
-      @(posedge vif.SCL_O);
-      req.Data[i] = vif.SDA_O;
-    end
-
-    
-    // ACK / NACK CAPTURE
-    
-    @(posedge vif.SCL_O);
-    req.SDA_I = vif.SDA_I;
-
-    
-    // STOP DETECTION (IMPORTANT FIX)
-    // SDA: 0 → 1 while SCL = 1
-    
-    if (prev_sda == 0 && vif.SDA_O == 1 && vif.SCL_O == 1) begin
-      `uvm_info("MON", "STOP detected (burst end)", UVM_LOW)
-    end
-
-    
-    // STORE BUS STATE
-    
+    // Capture everything
     req.rst   = vif.rst;
     req.start = vif.start;
+    req.Data  = vif.Data;
     req.SCL_O = vif.SCL_O;
     req.SDA_O = vif.SDA_O;
+    req.SDA_I = vif.SDA_I;
 
-    // update previous SDA
-    prev_sda = vif.SDA_O;
-
-    
-    // SEND TO SCOREBOARD
-    
-    `uvm_info("Master_monitor",
-      $sformatf("Captured Data=%0h ACK=%0b",
-                req.Data, req.SDA_I),
-      UVM_MEDIUM)
-
+    // Send this specific clock cycle's data to the scoreboard
     monitor_ap.write(req);
-
   end
 endtask
 

@@ -7,6 +7,9 @@ class Master_config extends uvm_object;
 
   `uvm_object_utils(Master_config)
 
+  // Configuration parameters for the Master agent
+  virtual I2C_if vif;
+
   function new(string name = "Master_config");
     super.new(name);
   endfunction
